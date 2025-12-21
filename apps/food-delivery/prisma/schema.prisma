@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// enum
+enum CuisineType {
+  PIZZA // Pizza các loại (Margherita, Pepperoni, v.v.)
+  FAST_FOOD // Đồ ăn nhanh (KFC, McDonald's, Burger, Gà rán)
+  VIETNAMESE // Ẩm thực Việt Nam (phở, bún, cơm tấm)
+  KOREAN // Ẩm thực Hàn Quốc (kimchi, tokbokki, BBQ Hàn)
+  JAPANESE // Ẩm thực Nhật Bản (sushi, ramen, bento)
+  CHINESE // Ẩm thực Trung Quốc (dimsum, mì, lẩu)
+  THAI // Ẩm thực Thái Lan (pad thai, tom yum)
+  INDIAN // Ẩm thực Ấn Độ (curry, naan)
+  WESTERN // Ẩm thực Âu – Mỹ (steak, pasta)
+  BBQ // Các món nướng / BBQ
+  SEAFOOD // Hải sản
+  DESSERT // Món tráng miệng (bánh ngọt, kem)
+  MILK_TEA // Trà sữa
+  DRINK // Đồ uống (nước ngọt, cà phê)
+  VEGETARIAN // Món chay
+}
+
+enum OrderStatus {
+  PENDING // Đơn hàng mới tạo, chờ nhà hàng xác nhận
+  CONFIRMED // Nhà hàng đã xác nhận đơn
+  PREPARING // Nhà hàng đang chuẩn bị món
+  DELIVERING // Đơn hàng đang được giao
+  COMPLETED // Giao hàng thành công
+  CANCELLED // Đơn hàng bị huỷ
+}
+
+enum RestaurantStatus {
+  ACTIVE // hoạt động bình thường
+  TEMP_CLOSED // tạm đóng (nghỉ trưa, hết hàng)
+  SUSPENDED // bị khoá (vi phạm, admin khóa)
+  CLOSED // đóng vĩnh viễn
+}
+
+enum UserRole {
+  USER // khách hàng
+  ADMIN // admin hệ thống
+  OWNER // chủ nhà hàng (optional)
+}
+
+model User {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName String
+  email    String   @unique
+  phone    String   @unique
+  password String
+  role     UserRole @default(USER)
+
+  orders Order[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([phone])
+  @@map("users")
+}
+
+// model
+model Restaurant {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  address     String
+  lat         Float
+  lng         Float
+  rating      Float?
+  cuisineType CuisineType      @default(VIETNAMESE)
+  status      RestaurantStatus @default(ACTIVE)
+
+  menuItems MenuItem[]
+  orders    Order[]
+
+  @@index([lat, lng])
+  @@index([cuisineType])
+  @@index([status])
+  @@map("restaurants")
+}
+
+model MenuItem {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String  @map("restaurant_id") @db.Uuid
+  name         String
+  price        Int
+  available    Boolean @default(true)
+  inventory    Int?
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  orderItems OrderItem[]
+
+  @@index([restaurantId])
+  @@map("menu_items")
+}
+
+model Order {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId    String      @map("restaurant_id") @db.Uuid
+  userId          String?     @map("user_id") @db.Uuid
+  phone           String
+  itemsValue      Json        @map("items_value")
+  total           Int
+  status          OrderStatus @default(PENDING)
+  idempotencyKey  String      @unique @map("idempotency_key")
+  deliveryAddress String
+  note            String?
+  user            User?       @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orderItems OrderItem[]
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId, createdAt])
+  @@index([phone])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId    String @map("order_id") @db.Uuid
+  menuItemId String @map("menu_item_id") @db.Uuid
+  quantity   Int
+  price      Int // price tại thời điểm order (snapshot)
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@unique([orderId, menuItemId])
+  @@index([orderId, menuItemId])
+  @@map("order_items")
+}
