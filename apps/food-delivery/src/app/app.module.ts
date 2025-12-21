@@ -6,6 +6,9 @@ import { AuthModule } from '../module/auth/auth.module';
 import { UserModule } from '../module/user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import Joi from 'joi';
+import { RedisModule } from '../common/redis/redis.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from '../module/auth/guard/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -18,13 +21,21 @@ import Joi from 'joi';
         DATABASE_URL: Joi.string().uri().required(),
         JWT_SECRET_KEY: Joi.string().min(32).required(),
         JWT_EXPIRES_IN: Joi.string().required(),
+        REDIS_URL: Joi.string().required(),
       }),
     }),
     PrismaModule,
+    RedisModule,
     AuthModule,
     UserModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
