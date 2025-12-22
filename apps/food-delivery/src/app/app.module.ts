@@ -9,6 +9,7 @@ import Joi from 'joi';
 import { RedisModule } from '../common/redis/redis.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '../module/auth/guard/jwt-auth.guard';
+import { RestaurantModule } from '../module/restaurant/restaurant.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { JwtAuthGuard } from '../module/auth/guard/jwt-auth.guard';
     RedisModule,
     AuthModule,
     UserModule,
+    RestaurantModule
   ],
   controllers: [AppController],
   providers: [
