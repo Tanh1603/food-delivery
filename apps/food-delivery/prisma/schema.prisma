@@ -81,6 +81,8 @@ model Restaurant {
   rating      Float?
   cuisineType CuisineType      @default(VIETNAMESE)
   status      RestaurantStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
   menuItems MenuItem[]
   orders    Order[]
@@ -92,16 +94,19 @@ model Restaurant {
 }
 
 model MenuItem {
-  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  restaurantId String  @map("restaurant_id") @db.Uuid
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
   name         String
   price        Int
-  available    Boolean @default(true)
+  available    Boolean  @default(true)
   inventory    Int?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orderItems OrderItem[]
 
+  @@unique([restaurantId, name])
   @@index([restaurantId])
   @@map("menu_items")
 }
@@ -117,10 +122,9 @@ model Order {
   idempotencyKey  String      @unique @map("idempotency_key")
   deliveryAddress String
   note            String?
-  user            User?       @relation(fields: [userId], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  user            User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
   orderItems OrderItem[]
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
@@ -132,11 +136,13 @@ model Order {
 }
 
 model OrderItem {
-  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId    String @map("order_id") @db.Uuid
-  menuItemId String @map("menu_item_id") @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId    String   @map("order_id") @db.Uuid
+  menuItemId String   @map("menu_item_id") @db.Uuid
   quantity   Int
-  price      Int // price tại thời điểm order (snapshot)
+  price      Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem MenuItem @relation(fields: [menuItemId], references: [id])
