@@ -1,16 +1,17 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PrismaModule } from '../module/prisma/prisma.module';
-import { AuthModule } from '../module/auth/auth.module';
-import { UserModule } from '../module/user/user.module';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import Joi from 'joi';
 import { RedisModule } from '../common/redis/redis.module';
-import { APP_GUARD } from '@nestjs/core';
+import { AuthModule } from '../module/auth/auth.module';
 import { JwtAuthGuard } from '../module/auth/guard/jwt-auth.guard';
-import { RestaurantModule } from '../module/restaurant/restaurant.module';
+import { MetricModule } from '../module/metrics/metric.module';
 import { OrderModule } from '../module/order/order.module';
+import { PrismaModule } from '../module/prisma/prisma.module';
+import { RestaurantModule } from '../module/restaurant/restaurant.module';
+import { UserModule } from '../module/user/user.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { OrderModule } from '../module/order/order.module';
         JWT_SECRET_KEY: Joi.string().min(32).required(),
         JWT_EXPIRES_IN: Joi.string().required(),
         REDIS_URL: Joi.string().required(),
+        SERVER_ID: Joi.string().required(),
       }),
     }),
     PrismaModule,
@@ -31,7 +33,8 @@ import { OrderModule } from '../module/order/order.module';
     AuthModule,
     UserModule,
     OrderModule,
-    RestaurantModule
+    MetricModule,
+    RestaurantModule,
   ],
   controllers: [AppController],
   providers: [
