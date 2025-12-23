@@ -1,0 +1,55 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL }}"
+  phases:
+    # Morning - Low traffic
+    - duration: 30
+      arrivalRate: 10
+      name: "Morning (10:00-10:30)"
+
+    # Pre-lunch - Traffic building up
+    - duration: 30
+      arrivalRate: 30
+      name: "Pre-lunch (10:30-11:00)"
+
+    # LUNCH RUSH! Peak traffic
+    - duration: 60
+      arrivalRate: 200
+      name: "🔥 LUNCH RUSH (11:00-12:00)"
+
+    # Post-lunch - Traffic decreasing
+    - duration: 30
+      arrivalRate: 50
+      name: "Post-lunch (12:00-12:30)"
+
+    # Afternoon - Back to normal
+    - duration: 30
+      arrivalRate: 10
+      name: "Afternoon (12:30-13:00)"
+
+  processor: "./processor.js"
+
+scenarios:
+  # Browse (60% during lunch rush)
+  - name: "Quick Browse"
+    weight: 60
+    flow:
+      - get:
+          url: "/api/restaurants"
+      - think: 1
+      - get:
+          url: "/api/restaurants/{{ $randomNumber(1, 20) }}/menu"
+
+  # Order (40% during lunch rush)
+  - name: "Place Order"
+    weight: 40
+    flow:
+      - post:
+          url: "/api/orders"
+          json:
+            restaurant_id: "{{ $randomNumber(1, 20) }}"
+            user_email: "user{{ $randomNumber(1, 1000) }}@test.com"
+            items:
+              - menu_item_id: "{{ $randomNumber(1, 50) }}"
+                quantity: "{{ $randomNumber(1, 3) }}"
+          expect:
+            - statusCode: 201

@@ -1,0 +1,48 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL }}"
+  phases:
+    - duration: 120
+      arrivalRate: 50
+      name: "Normal traffic"
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+  processor: "./processor.js"
+
+scenarios:
+  # Scenario: Browse restaurants (70%)
+  - name: "Browse Restaurants"
+    weight: 70
+    flow:
+      - get:
+          url: "/api/restaurants"
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$[0].id"
+              as: "restaurantId"
+
+      - think: 2  # User reads list for 2 seconds
+
+      - get:
+          url: "/api/restaurants/{{ restaurantId }}"
+          expect:
+            - statusCode: 200
+
+      - think: 3  # User reads details for 3 seconds
+
+      - get:
+          url: "/api/restaurants/{{ restaurantId }}/menu"
+          expect:
+            - statusCode: 200
+
+      - think: 5  # User browses menu for 5 seconds
+
+  # Scenario: Direct access (30%)
+  - name: "Direct Restaurant Access"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/restaurants/{{ $randomNumber(1, 20) }}"
+          expect:
+            - statusCode: 200
