@@ -12,7 +12,7 @@ scrape_configs:
   # Scrape API Instance 1
   - job_name: 'api'
     static_configs:
-      - targets: ['api:3000']
+      - targets: ['host.docker.internal:3000']
         labels:
           server_id: 'api-1'
     metrics_path: '/api/metrics'

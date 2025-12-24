@@ -55,28 +55,23 @@ const seedUser = async () => {
     password: bcrypt.hashSync('123456', 10),
   });
 
-  const usedEmails = new Set(['admin@example.com', 'owner@example.com']);
   const usedPhones = new Set(['0987654321', '0987654322']);
 
   // 100 Users
   for (let i = 0; i < 100; i++) {
-    let email = faker.internet.email();
     let phone = faker.phone.number();
 
     // đảm bảo không trùng
-    while (usedEmails.has(email)) {
-      email = faker.internet.email();
-    }
     while (usedPhones.has(phone)) {
       phone = faker.phone.number();
     }
 
-    usedEmails.add(email);
+    // usedEmails.add(email);
     usedPhones.add(phone);
 
     data.push({
       fullName: faker.person.fullName(),
-      email,
+      email: `user${i}@gm.com`,
       phone,
       role: UserRole.USER,
       password: bcrypt.hashSync('123456', 10),
