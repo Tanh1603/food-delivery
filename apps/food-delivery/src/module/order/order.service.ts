@@ -1,5 +1,9 @@
 import { OrderStatus } from './../../../generated/prisma/enums';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ApiResponse } from '../../common/dto/api-response.dto';
@@ -174,54 +178,59 @@ export class OrderService {
     const total = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     // 5. TRANSACTION: create order + lock inventory
-    const order = await this.prisma.$transaction(async (tx) => {
-      // 5.1 trừ inventory (chỉ khi inventory != null)
-      for (const item of dto.items) {
-        const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+    const order = await this.prisma.$transaction(
+      async (tx) => {
+        // 5.1 trừ inventory (chỉ khi inventory != null)
+        for (const item of dto.items) {
+          const menuItem = menuItems.find((m) => m.id === item.menuItemId);
 
-        if (menuItem.inventory !== null) {
-          const updated = await tx.menuItem.updateMany({
-            where: {
-              id: menuItem.id,
-              inventory: {
-                gte: item.quantity, // optimistic lock
+          if (menuItem.inventory !== null) {
+            const updated = await tx.menuItem.updateMany({
+              where: {
+                id: menuItem.id,
+                inventory: {
+                  gte: item.quantity, // optimistic lock
+                },
               },
-            },
-            data: {
-              inventory: {
-                decrement: item.quantity,
+              data: {
+                inventory: {
+                  decrement: item.quantity,
+                },
+                available:
+                  menuItem.inventory - item.quantity - 0 <= 0
+                    ? false
+                    : undefined,
               },
-              available:
-                menuItem.inventory - item.quantity - 0 <= 0 ? false : undefined,
-            },
-          });
+            });
 
-          if (updated.count === 0) {
-            throw new BadRequestException(
-              `Menu qq "${menuItem.name}" is out of stock`,
-            );
+            if (updated.count === 0) {
+              throw new BadRequestException(
+                `Menu qq "${menuItem.name}" is out of stock`,
+              );
+            }
           }
         }
-      }
 
-      // 5.2 create order
-      return tx.order.create({
-        data: {
-          restaurantId: dto.restaurantId,
-          userId: dto.userId,
-          phone: dto.phone,
-          deliveryAddress: dto.deliveryAddress,
-          note: dto.note,
-          idempotencyKey: dto.idempotencyKey,
-          status: OrderStatus.PENDING,
-          total,
-          itemsValue: orderItems,
-          orderItems: {
-            create: orderItems,
+        // 5.2 create order
+        return tx.order.create({
+          data: {
+            restaurantId: dto.restaurantId,
+            userId: dto.userId,
+            phone: dto.phone,
+            deliveryAddress: dto.deliveryAddress,
+            note: dto.note,
+            idempotencyKey: dto.idempotencyKey,
+            status: OrderStatus.PENDING,
+            total,
+            itemsValue: orderItems,
+            orderItems: {
+              create: orderItems,
+            },
           },
-        },
-      });
-    });
+        });
+      },
+      { timeout: 10000 },
+    );
 
     return {
       success: true,
@@ -320,9 +329,33 @@ export class OrderService {
     };
   }
 
-  // findOne(id: number) {
-  //   return `This action returns a #id order`;
-  // }
+  async findOne(id: string): Promise<ApiResponse<OrderDto>> {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { orderItems: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return {
+      success: true,
+      data: {
+        id: order.id,
+        restaurantId: order.restaurantId,
+        userId: order.userId,
+        phone: order.phone,
+        deliveryAddress: order.deliveryAddress,
+        status: order.status,
+        total: order.total,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        itemsValue: order.itemsValue,
+      },
+      message: 'Fetch order detail successfully!',
+    };
+  }
 
   // update(id: number, updateOrderDto: UpdateOrderDto) {
   //   return `This action updates a #id order`;

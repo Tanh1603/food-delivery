@@ -1,23 +1,27 @@
 services:
   api:
+    image: food-delivery:api
     build:
       context: .
-      dockerfile: apps/food-delivery/Dockerfile
-    container_name: food-delivery-api
+      dockerfile: apps/food-delivery/Dockerfile.dev
     ports:
       - "3000:3000"
     env_file:
       - "./apps/food-delivery/.env"
-    networks:
-      - monitoring
+    volumes:
+      - ./apps:/app/apps
+      - ./nx.json:/app/nx.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
     deploy:
       resources:
         limits:
           cpus: "0.5"
-          memory: 128M
+          memory: 512M
         reservations:
           cpus: "0.25"
           memory: 128M
+    networks:
+      - monitoring-network
 
   prometheus:
     image: prom/prometheus:latest
@@ -30,7 +34,7 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - monitoring
+      - monitoring-network
 
   grafana:
     image: grafana/grafana:latest
@@ -43,15 +47,15 @@ services:
       - grafana-storage:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - monitoring-network
     depends_on:
       - prometheus
-    networks:
-      - monitoring
 
 volumes:
   prometheus-data:
   grafana-storage:
 
 networks:
-  monitoring:
+  monitoring-network:
     driver: bridge

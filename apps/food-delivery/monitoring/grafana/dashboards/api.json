@@ -1,17 +1,34 @@
 {
-  "uid": "food-delivery-api-prod-full",
-  "title": "Food Delivery API - Full Observability",
+  "uid": "food-delivery-api-prod-optimized",
+  "title": "Food Delivery API - Observability Optimized",
   "schemaVersion": 39,
   "version": 2,
   "refresh": "10s",
   "tags": ["production", "api", "observability"],
   "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "interval",
+        "type": "custom",
+        "query": "30s,1m,2m,5m,10m",
+        "current": { "text": "1m", "value": "1m" },
+        "hide": 0
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "API Status",
-      "targets": [{ "expr": "up{job=\"api\"}", "refId": "A" }],
+      "targets": [
+        {
+          "expr": "up{job=\"api\"}",
+          "refId": "A",
+          "legendFormat": "{{server_id}}"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -25,125 +42,94 @@
               { "color": "red", "value": 0 },
               { "color": "green", "value": 1 }
             ]
-          }
+          },
+          "unit": "none"
         }
       },
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 }
     },
     {
       "id": 2,
-      "type": "stat",
-      "title": "Active Requests (Total)",
-      "targets": [{ "expr": "sum(http_active_requests)", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "none" } },
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 }
+      "type": "timeseries",
+      "title": "Active Requests (Total) Over Time",
+      "targets": [
+        {
+          "expr": "sum(http_active_requests)",
+          "refId": "A",
+          "legendFormat": "Total Active Requests"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "requests" } },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 }
     },
     {
       "id": 3,
-      "type": "stat",
-      "title": "Request Rate (Total RPS)",
+      "type": "timeseries",
+      "title": "Request Rate (Total RPS) Over Time",
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[1m])) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "Total RPS"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "req/s" } },
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 }
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 }
     },
     {
       "id": 4,
-      "type": "stat",
-      "title": "Error Rate (%)",
+      "type": "timeseries",
+      "title": "Error Rate (%) Over Time",
       "targets": [
         {
-          "expr": "(sum by(route) (rate(http_requests_total{status_code=~\"4..|5..\"}[1m])) / sum by(route) (rate(http_requests_total[1m]))) * 100",
+          "expr": "(sum by(route) (rate(http_requests_total{status_code=~\"4..|5..\"}[1m])) / sum by(route) (rate(http_requests_total[1m])))*100",
+          "legendFormat": "{{route}}",
           "refId": "A"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "percent" } },
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 }
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 }
     },
     {
       "id": 5,
-      "type": "stat",
-      "title": "P95 Latency (Total ms)",
+      "type": "timeseries",
+      "title": "P95 & P99 Latency Over Time",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_ms_bucket[5m]))) or vector(0)",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_ms_bucket[1m])))",
+          "legendFormat": "P95",
           "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_ms_bucket[1m])))",
+          "legendFormat": "P99",
+          "refId": "B"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "ms" } },
-      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 }
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 6 }
     },
     {
       "id": 6,
-      "type": "stat",
-      "title": "P99 Latency (Total ms)",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_ms_bucket[5m]))) or vector(0)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "gridPos": { "x": 6, "y": 4, "w": 6, "h": 4 }
-    },
-    {
-      "id": 7,
       "type": "timeseries",
-      "title": "Active Requests by Instance",
+      "title": "Active Requests & RPS by Instance",
       "targets": [
         {
           "expr": "http_active_requests",
-          "legendFormat": "{{server_id}}",
+          "legendFormat": "{{server_id}} Active Requests",
           "refId": "A"
-        }
-      ],
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 4 }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Request Rate by Route",
-      "targets": [
+        },
         {
-          "expr": "sum by(route, method) (rate(http_requests_total[1m]))",
-          "legendFormat": "{{route}} {{method}}",
-          "refId": "A"
+          "expr": "sum by(server_id) (rate(http_requests_total[1m]))",
+          "legendFormat": "{{server_id}} RPS",
+          "refId": "B"
         }
       ],
-      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 6 }
+      "fieldConfig": { "defaults": { "unit": "requests" } },
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 6 }
     },
     {
-      "id": 9,
-      "type": "timeseries",
-      "title": "Latency by Route (P95)",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by(le, route, method) (rate(http_request_duration_ms_bucket[5m])))",
-          "legendFormat": "{{route}} {{method}}",
-          "refId": "A"
-        }
-      ],
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 6 }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Error Breakdown by Status",
-      "targets": [
-        {
-          "expr": "sum by(status_code) (rate(http_requests_total[1m]))",
-          "legendFormat": "{{status_code}}",
-          "refId": "A"
-        }
-      ],
-      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 6 }
-    },
-    {
-      "id": 11,
+      "id": 7,
       "type": "timeseries",
       "title": "Errors by Instance",
       "targets": [
@@ -153,33 +139,27 @@
           "refId": "A"
         }
       ],
-      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 6 }
+      "fieldConfig": { "defaults": { "unit": "count" } },
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 }
     },
     {
-      "id": 12,
+      "id": 8,
       "type": "timeseries",
-      "title": "CPU Usage per Instance (%)",
+      "title": "CPU & Memory Usage per Instance",
       "targets": [
         {
           "expr": "avg by(server_id) (cpu_usage_percent)",
-          "legendFormat": "{{server_id}}",
+          "legendFormat": "{{server_id}} CPU %",
           "refId": "A"
-        }
-      ],
-      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 6 }
-    },
-    {
-      "id": 13,
-      "type": "timeseries",
-      "title": "Memory Usage per Instance (MB)",
-      "targets": [
+        },
         {
           "expr": "avg by(server_id) (memory_usage_bytes / 1024 / 1024)",
-          "legendFormat": "{{server_id}}",
-          "refId": "A"
+          "legendFormat": "{{server_id}} Memory MB",
+          "refId": "B"
         }
       ],
-      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 6 }
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 6 }
     }
   ]
 }
