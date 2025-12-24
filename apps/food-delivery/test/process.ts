@@ -1,6 +1,6 @@
 // load-test.ts
 import { randomUUID } from 'crypto';
-import tokens from './script/tokens.json' assert { type: 'json' };
+import tokens from './scripts/tokens.json' assert { type: 'json' };
 
 const tokenMap: Record<string, unknown> = tokens;
 
