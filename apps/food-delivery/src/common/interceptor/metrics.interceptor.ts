@@ -20,8 +20,16 @@ export class MetricsInterceptor implements NestInterceptor {
     const route = request.route?.path || request.url; // fallback nếu route chưa match
     const method = request.method;
 
-    if (route === '/api/metrics') {
-      return next.handle(); // skip metric cho route /metrics
+    const SKIP_PATHS = [
+      '/api/metrics',
+      '/api/health',
+      '/api/ready',
+      '/api/live',
+      '/health',
+    ];
+
+    if (SKIP_PATHS.some((p) => route.startsWith(p))) {
+      return next.handle();
     }
 
     const startTime = Date.now();
@@ -52,4 +60,3 @@ export class MetricsInterceptor implements NestInterceptor {
     );
   }
 }
-

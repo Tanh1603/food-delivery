@@ -1,17 +1,22 @@
 services:
-  api:
-    image: food-delivery:api
+  # food-delivery api instances
+  api-1:
+    image: food-delivery:api-1
+    container_name: api-1
     build:
       context: .
       dockerfile: apps/food-delivery/Dockerfile.dev
     ports:
-      - "3000:3000"
+      - "3001:3000"
     env_file:
       - "./apps/food-delivery/.env"
+    environment:
+      - SERVER_ID=api-1
     volumes:
       - ./apps:/app/apps
       - ./nx.json:/app/nx.json
       - ./tsconfig.base.json:/app/tsconfig.base.json
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -21,11 +26,131 @@ services:
           cpus: "0.25"
           memory: 128M
     networks:
-      - monitoring-network
+      - food-network
 
+  api-2:
+    image: food-delivery:api-2
+    container_name: api-2
+    ports:
+      - "3002:3000"
+    build:
+      context: .
+      dockerfile: apps/food-delivery/Dockerfile.dev
+    env_file:
+      - "./apps/food-delivery/.env"
+    environment:
+      - SERVER_ID=api-2
+    volumes:
+      - ./apps:/app/apps
+      - ./nx.json:/app/nx.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - food-network
+
+  api-3:
+    image: food-delivery:api-3
+    container_name: api-3
+    ports:
+      - "3003:3000"
+    build:
+      context: .
+      dockerfile: apps/food-delivery/Dockerfile.dev
+    env_file:
+      - "./apps/food-delivery/.env"
+    environment:
+      - SERVER_ID=api-3
+    volumes:
+      - ./apps:/app/apps
+      - ./nx.json:/app/nx.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - food-network
+
+  api-4:
+    image: food-delivery:api-4
+    container_name: api-4
+    ports:
+      - "3004:3000"
+    build:
+      context: .
+      dockerfile: apps/food-delivery/Dockerfile.dev
+    env_file:
+      - "./apps/food-delivery/.env"
+    environment:
+      - SERVER_ID=api-4
+    volumes:
+      - ./apps:/app/apps
+      - ./nx.json:/app/nx.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - food-network
+
+  # nginx load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: food-delivery-nginx
+    env_file:
+      - "./apps/food-delivery/.env"
+    ports:
+      - "8080:80"
+      - "443:443"
+    volumes:
+    - ./apps/food-delivery/nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+    - ./apps/food-delivery/nginx/entrypoint.sh:/etc/nginx/entrypoint.sh:ro
+    - ./apps/food-delivery/nginx/logs:/var/log/nginx
+    depends_on:
+      - api-1
+      - api-2
+      - api-3
+    networks:
+      - food-network
+    restart: unless-stopped
+    command: /etc/nginx/entrypoint.sh
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # monitoring services
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus
+    container_name: food-delivery-prometheus
     volumes:
       - ./apps/food-delivery/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -34,11 +159,11 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - monitoring-network
+      - food-network
 
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
+    container_name: food-delivery-grafana
     ports:
       - "5050:3000"
     volumes:
@@ -48,7 +173,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     networks:
-      - monitoring-network
+      - food-network
     depends_on:
       - prometheus
 
@@ -57,5 +182,5 @@ volumes:
   grafana-storage:
 
 networks:
-  monitoring-network:
+  food-network:
     driver: bridge

@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Counter, Gauge, Histogram, register, exponentialBuckets } from 'prom-client';
 
 @Injectable()
@@ -81,38 +81,39 @@ export class MetricService implements OnModuleInit {
       .inc();
 
     // Log for debugging
-    console.log(
+    Logger.log(
       `[${serverId}] ${method} ${route} - ${durationMs}ms - ${statusCode}`,
     );
   }
+  private lastCpuUsage = process.cpuUsage();
+  private lastTime = Date.now();
 
-  // Update CPU and Memory usage periodically
   updateResourceUsage() {
     const serverId = process.env.SERVER_ID || 'unknown';
 
-    // CPU usage của tiến trình Node.js
-    const cpuUsage = process.cpuUsage(); // { user, system } (microseconds)
-    const totalMicros = cpuUsage.user + cpuUsage.system;
+    const currentCpu = process.cpuUsage(this.lastCpuUsage);
+    const currentTime = Date.now();
 
-    // Chuyển sang phần trăm so với 1 giây
-    // process.cpuUsage() trả về microseconds kể từ last call hoặc từ start
-    // Giả sử updateResourceUsage chạy mỗi 10s, tính % CPU trong 10s
-    const intervalMs = 10000; // khoảng thời gian giữa các update
-    const cpuPercent = (totalMicros / 1000 / intervalMs) * 100;
+    const elapsedMs = currentTime - this.lastTime;
+
+    // CPU dùng trong khoảng thời gian này (microseconds)
+    const cpuUsedMicros = currentCpu.user + currentCpu.system;
+
+    // Số core
+    const numCores = require('os').cpus().length;
+
+    // % CPU
+    const cpuPercent = (cpuUsedMicros / 1000 / (elapsedMs * numCores)) * 100;
 
     this.cpuUsage.labels(serverId).set(cpuPercent);
 
-    // Memory usage vẫn dùng RSS
-    const memoryUsed = process.memoryUsage().rss; // resident set size
+    // Memory RSS
+    const memoryUsed = process.memoryUsage().rss;
     this.memoryUsage.labels(serverId).set(memoryUsed);
-  }
 
-  /**
-   * Increment active requests
-   */
-  incrementActiveRequests() {
-    const serverId = process.env.SERVER_ID || 'unknown';
-    this.activeRequests.labels(serverId).inc();
+    // update snapshot
+    this.lastCpuUsage = process.cpuUsage();
+    this.lastTime = currentTime;
   }
 
   /**

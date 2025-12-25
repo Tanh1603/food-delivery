@@ -1,18 +1,24 @@
+import dotenv from 'dotenv';
+
+dotenv.config({
+  path: '../.env',
+});
+
 import { Config } from 'artillery';
 // ==================== CONFIG ====================
 export const config: Config = {
-  target: process.env.API_URL || 'http://localhost:3000',
+  target: process.env.API_URL || 'http://localhost:8080',
   http: {
     timeout: 120000, // 2 phút, để request lâu bị nghẽn vẫn đợi
   },
   phases: [
     // ramp-up từ thấp → cao
-    // { duration: 60, arrivalRate: 2, name: 'Ramp-up: Low Traffic' },
-    // { duration: 60, arrivalRate: 5, name: 'Ramp-up: Moderate Traffic' },
-    // { duration: 120, arrivalRate: 10, name: 'Ramp-up: High Traffic' },
-    // { duration: 60, arrivalRate: 5, name: 'Ramp-down: Moderate Traffic' },
-    // { duration: 60, arrivalRate: 2, name: 'Ramp-down: Low Traffic' },
-    { duration: 2, arrivalRate: 2, name: 'Ramp-down: Low Traffic' },
+    { duration: 60, arrivalRate: 2, name: 'Ramp-up: Low Traffic' },
+    { duration: 60, arrivalRate: 5, name: 'Ramp-up: Moderate Traffic' },
+    { duration: 120, arrivalRate: 10, name: 'Ramp-up: High Traffic' },
+    { duration: 60, arrivalRate: 5, name: 'Ramp-down: Moderate Traffic' },
+    { duration: 60, arrivalRate: 2, name: 'Ramp-down: Low Traffic' },
+    // { duration: 2, arrivalRate: 2, name: 'Ramp-down: Low Traffic' },
   ],
   processor: './process.ts',
   plugins: { expect: {} },

@@ -14,6 +14,15 @@
         "query": "30s,1m,2m,5m,10m",
         "current": { "text": "1m", "value": "1m" },
         "hide": 0
+      },
+      {
+        "name": "server_id",
+        "type": "query",
+        "label": "Instance",
+        "query": "label_values(http_request_duration_ms_bucket, server_id)",
+        "multi": false,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
       }
     ]
   },
@@ -24,7 +33,7 @@
       "title": "API Status",
       "targets": [
         {
-          "expr": "up{job=\"api\"}",
+          "expr": "up{job=~\"api-.*\"}",
           "refId": "A",
           "legendFormat": "{{server_id}}"
         }
@@ -68,7 +77,7 @@
       "title": "Request Rate (Total RPS) Over Time",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[1m])) or vector(0)",
+          "expr": "sum(rate(http_requests_total[$interval])) or vector(0)",
           "refId": "A",
           "legendFormat": "Total RPS"
         }
@@ -96,18 +105,27 @@
       "title": "P95 & P99 Latency Over Time",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_ms_bucket[1m])))",
-          "legendFormat": "P95",
+          "expr": "histogram_quantile(0.95, sum by(le, server_id) (rate(http_request_duration_ms_bucket{server_id=~\"$server_id\"}[$interval])))",
+          "legendFormat": "{{server_id}} P95",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_ms_bucket[1m])))",
-          "legendFormat": "P99",
+          "expr": "histogram_quantile(0.99, sum by(le, server_id) (rate(http_request_duration_ms_bucket{server_id=~\"$server_id\"}[$interval])))",
+          "legendFormat": "{{server_id}} P99",
           "refId": "B"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 6 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 6
+      }
     },
     {
       "id": 6,
@@ -115,12 +133,12 @@
       "title": "Active Requests & RPS by Instance",
       "targets": [
         {
-          "expr": "http_active_requests",
+          "expr": "http_active_requests{server_id=~\"$server_id\"}",
           "legendFormat": "{{server_id}} Active Requests",
           "refId": "A"
         },
         {
-          "expr": "sum by(server_id) (rate(http_requests_total[1m]))",
+          "expr": "sum by(server_id) (rate(http_requests_total{server_id=~\"$server_id\"}[$interval]))",
           "legendFormat": "{{server_id}} RPS",
           "refId": "B"
         }
@@ -134,32 +152,13 @@
       "title": "Errors by Instance",
       "targets": [
         {
-          "expr": "sum by(server_id, status_code) (rate(http_requests_total[1m]))",
+          "expr": "sum by(server_id, status_code) (rate(http_requests_total{server_id=\"$server_id\", status_code=~\"4..|5..\"}[$interval]))",
           "legendFormat": "{{server_id}} ({{status_code}})",
           "refId": "A"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "count" } },
       "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "CPU & Memory Usage per Instance",
-      "targets": [
-        {
-          "expr": "avg by(server_id) (cpu_usage_percent)",
-          "legendFormat": "{{server_id}} CPU %",
-          "refId": "A"
-        },
-        {
-          "expr": "avg by(server_id) (memory_usage_bytes / 1024 / 1024)",
-          "legendFormat": "{{server_id}} Memory MB",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 6 }
     }
   ]
 }

@@ -13,7 +13,7 @@ const TEST_USERS: User[] = Array.from({ length: 50 }, (_, i) => ({
   password: '123456',
 }));
 
-const API_URL = process.env.API_URL || 'http://localhost:3000';
+const API_URL = process.env.API_URL || 'http://localhost:8080';
 
 async function main() {
   const tokens: Record<string, { access_token: string; userId: string }> = {};

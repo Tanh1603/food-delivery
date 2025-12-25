@@ -25,6 +25,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (isPublic) {
       return true;
     }
+    if (process.env.AUTH_MODE === 'DISABLED') {
+      return true;
+    }
 
     const result = (await super.canActivate(context)) as boolean;
     if (!result) return false;
