@@ -1,5 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Counter, Gauge, Histogram, register, exponentialBuckets } from 'prom-client';
+import {
+  Counter,
+  Gauge,
+  Histogram,
+  register,
+  exponentialBuckets,
+} from 'prom-client';
 
 @Injectable()
 export class MetricService implements OnModuleInit {
@@ -114,6 +120,11 @@ export class MetricService implements OnModuleInit {
     // update snapshot
     this.lastCpuUsage = process.cpuUsage();
     this.lastTime = currentTime;
+  }
+
+  incrementActiveRequests() {
+    const serverId = process.env.SERVER_ID || 'unknown';
+    this.activeRequests.labels(serverId).inc();
   }
 
   /**
