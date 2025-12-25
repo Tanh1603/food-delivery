@@ -122,6 +122,11 @@ export class MetricService implements OnModuleInit {
     this.lastTime = currentTime;
   }
 
+  incrementActiveRequests() {
+    const serverId = process.env.SERVER_ID || 'unknown';
+    this.activeRequests.labels(serverId).inc();
+  }
+
   /**
    * Increment active requests
    */
