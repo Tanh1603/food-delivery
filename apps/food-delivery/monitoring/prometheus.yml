@@ -1,37 +1,75 @@
+# global:
+#   scrape_interval: 15s # Scrape metrics every 15 seconds
+#   evaluation_interval: 15s
+
+# # Scrape configurations
+# scrape_configs:
+#   # Scrape Prometheus itself
+#   - job_name: 'prometheus'
+#     static_configs:
+#       - targets: ['localhost:9090']
+
+#   # Scrape API Instance 1
+#   - job_name: 'api-1'
+#     static_configs:
+#       - targets: ['host.docker.internal:3000']
+#         labels:
+#           server_id: 'api-1'
+#     metrics_path: '/api/metrics'
+#     scrape_interval: 10s
+
+#   # Scrape API Instance 2
+#   - job_name: 'api-2'
+#     static_configs:
+#       - targets: ['host.docker.internal:3000']
+#         labels:
+#           server_id: 'api-2'
+#     metrics_path: '/api/metrics'
+#     scrape_interval: 10s
+
+#   # Scrape API Instance 3
+#   - job_name: 'api-3'
+#     static_configs:
+#       - targets: ['host.docker.internal:3000']
+#         labels:
+#           server_id: 'api-3'
+#     metrics_path: '/api/metrics'
+#     scrape_interval: 10s
+
 global:
-  scrape_interval: 15s # Scrape metrics every 15 seconds
+  scrape_interval: 15s
   evaluation_interval: 15s
 
-# Scrape configurations
 scrape_configs:
-  # Scrape Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # Scrape API Instance 1
-  - job_name: 'api'
+  - job_name: 'api-1'
     static_configs:
-      - targets: ['host.docker.internal:3000']
+      - targets: ['api-1:3000']
         labels:
           server_id: 'api-1'
     metrics_path: '/api/metrics'
-    scrape_interval: 10s
 
-  # # Scrape API Instance 2
-  # - job_name: 'api-2'
-  #   static_configs:
-  #     - targets: ['api-2:3000']
-  #       labels:
-  #         server_id: 'api-2'
-  #   metrics_path: '/metrics'
-  #   scrape_interval: 10s
+  - job_name: 'api-2'
+    static_configs:
+      - targets: ['api-2:3000']
+        labels:
+          server_id: 'api-2'
+    metrics_path: '/api/metrics'
 
-  # # Scrape API Instance 3
-  # - job_name: 'api-3'
-  #   static_configs:
-  #     - targets: ['api-3:3000']
-  #       labels:
-  #         server_id: 'api-3'
-  #   metrics_path: '/metrics'
-  #   scrape_interval: 10s
+  - job_name: 'api-3'
+    static_configs:
+      - targets: ['api-3:3000']
+        labels:
+          server_id: 'api-3'
+    metrics_path: '/api/metrics'
+
+  - job_name: 'api-4'
+    static_configs:
+      - targets: ['api-4:3000']
+        labels:
+          server_id: 'api-4'
+    metrics_path: '/api/metrics'
+

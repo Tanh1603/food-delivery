@@ -5,6 +5,7 @@ import Joi from 'joi';
 import { RedisModule } from '../common/redis/redis.module';
 import { AuthModule } from '../module/auth/auth.module';
 import { JwtAuthGuard } from '../module/auth/guard/jwt-auth.guard';
+import { HealthModule } from '../module/health/health.module';
 import { MetricModule } from '../module/metrics/metric.module';
 import { OrderModule } from '../module/order/order.module';
 import { PrismaModule } from '../module/prisma/prisma.module';
@@ -35,6 +36,7 @@ import { AppService } from './app.service';
     OrderModule,
     MetricModule,
     RestaurantModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

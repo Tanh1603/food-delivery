@@ -19,7 +19,10 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
@@ -32,7 +35,7 @@ async function bootstrap() {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
         const status = exception.getStatus?.() || 500;
-        console.error('Exception thrown:', exception);
+        Logger.error('Exception thrown:', exception);
         response
           .status(status)
           .json({ message: exception.message || 'Internal server error' });
@@ -40,7 +43,29 @@ async function bootstrap() {
     })(),
   );
 
-  await app.listen(port);
+  app.enableShutdownHooks();
+
+  const server = await app.listen(process.env.PORT);
+
+  // Graceful shutdown handler
+  const gracefulShutdown = (signal: string) => {
+    Logger.log(`${signal} received. Starting graceful shutdown...`);
+    server.close(() => {
+      Logger.log(`Server ${process.env.SERVER_ID} closed`);
+      process.exit(0);
+    });
+
+    // Force close after 30 seconds
+    setTimeout(() => {
+      Logger.error(
+        'Could not close connections in time, forcefully shutting down',
+      );
+      process.exit(1);
+    }, 30000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   Logger.log(
     `🚀 Application running on: http://localhost:${port}/${globalPrefix}`,
   );
