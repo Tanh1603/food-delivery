@@ -7,16 +7,22 @@ import { RestaurantDto } from './dto/restaurant.dto';
 import { RestaurantQuery } from './dto/restaurant.query';
 import { MenuItemDto } from '../menu/dto/menu-item.dto';
 import { MenuItemQuery } from '../menu/dto/menu-item.query';
+import { RedisService } from '../../common/redis/redis.service';
 
 @Injectable()
 export class RestaurantService {
-  constructor(private prisma: PrismaService) {}
-
-  // create(createRestaurantDto: CreateRestaurantDto) {
-  //   return 'This action adds a new restaurant';
-  // }
+  constructor(
+    private prisma: PrismaService,
+    private redisService: RedisService,
+  ) {}
 
   async findAll(query: RestaurantQuery): Promise<ApiResponse<RestaurantDto[]>> {
+    const key = `restaurants:list:${JSON.stringify(query)}`;
+    const cached = await this.redisService.get(key);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     const pagination = getPaginationOptions(query);
 
     const [restaurants, total] = await Promise.all([
@@ -36,7 +42,7 @@ export class RestaurantService {
       this.prisma.restaurant.count(),
     ]);
 
-    return successResponse<RestaurantDto[]>(
+    const response = successResponse<RestaurantDto[]>(
       [...restaurants],
       'Fetch restaurants successfully!',
       {
@@ -46,9 +52,19 @@ export class RestaurantService {
         totalPages: Math.ceil(total / (query.limit ? query.limit : 10)),
       },
     );
+
+    await this.redisService.set(key, JSON.stringify(response), 300); // cache for 5 minutes
+
+    return response;
   }
 
   async findOne(id: string): Promise<ApiResponse<RestaurantDto>> {
+    const key = `restaurants:detail:${id}`;
+    const cache = await this.redisService.get(key);
+    if (cache) {
+      return JSON.parse(cache);
+    }
+
     const restaurant = await this.prisma.restaurant.findUnique({
       where: {
         id,
@@ -65,24 +81,27 @@ export class RestaurantService {
       },
     });
 
-    return successResponse<RestaurantDto>(
+    const response = successResponse<RestaurantDto>(
       { ...restaurant },
       'Fetch restaurant detail successfully!',
     );
+
+    await this.redisService.set(key, JSON.stringify(response), 300);
+
+    return response;
   }
-
-  // update(id: number, updateRestaurantDto: UpdateRestaurantDto) {
-  //   return `This action updates a #id restaurant`;
-  // }
-
-  // remove(id: number) {
-  //   return `This action removes a #id restaurant`;
-  // }
 
   async getMenuItems(
     restaurantId: string,
     query: MenuItemQuery,
   ): Promise<ApiResponse<MenuItemDto[]>> {
+    const key = `restaurants:${restaurantId}:menu-items:list:${JSON.stringify(query)}`;
+    const cached = await this.redisService.get(key);
+
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     const pagination = getPaginationOptions(query);
 
     const [menuItems, total] = await Promise.all([
@@ -106,7 +125,7 @@ export class RestaurantService {
       }),
     ]);
 
-    return successResponse<MenuItemDto[]>(
+    const response = successResponse<MenuItemDto[]>(
       [...menuItems],
       'Fetch menu items successfully!',
       {
@@ -116,5 +135,9 @@ export class RestaurantService {
         totalPages: Math.ceil(total / (query.limit ? query.limit : 10)),
       },
     );
+
+    await this.redisService.set(key, JSON.stringify(response), 300);
+
+    return response;
   }
 }

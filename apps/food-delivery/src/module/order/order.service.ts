@@ -1,256 +1,192 @@
-import { OrderStatus } from './../../../generated/prisma/enums';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { Queue } from 'bullmq';
 import { ApiResponse } from '../../common/dto/api-response.dto';
+import { successResponse } from '../../common/helper/api-response.helper';
+import { getPaginationOptions } from '../../common/helper/pagination-query.helper';
+import { Cache_QUEUE, CacheJobName } from '../../common/redis/cache.processor';
+import { RedisService } from '../../common/redis/redis.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { OrderStatus } from './../../../generated/prisma/enums';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderDto } from './dto/order.dto';
 import { OrderQuery } from './dto/order.query';
-import { getPaginationOptions } from '../../common/helper/pagination-query.helper';
-import { successResponse } from '../../common/helper/api-response.helper';
+import { ORDER_QUEUE, OrderJobName } from './order.processor';
 
+type OrderItemValue = {
+  menuItemId: string;
+  quantity: number;
+  price: number;
+  name: string;
+};
 @Injectable()
 export class OrderService {
-  constructor(private prisma: PrismaService) {}
+  private logger = new Logger(OrderService.name);
 
-  // async create(dto: CreateOrderDto): Promise<ApiResponse<OrderDto>> {
-  //   // idempotency check
-  //   const existed = await this.prisma.order.findUnique({
-  //     where: { idempotencyKey: dto.idempotencyKey },
-  //   });
-
-  //   if (existed)
-  //     return {
-  //       success: true,
-  //       data: {
-  //         id: existed.id,
-  //         restaurantId: existed.restaurantId,
-  //         userId: existed.userId,
-  //         phone: existed.phone,
-  //         deliveryAddress: existed.deliveryAddress,
-  //         status: existed.status,
-  //         total: existed.total,
-  //         createdAt: existed.createdAt,
-  //         updatedAt: existed.createdAt,
-  //         itemsValue: existed.itemsValue,
-  //       },
-  //       message: 'Existing order',
-  //     };
-
-  //   // fetch menu items
-  //   const menuItems = await this.prisma.menuItem.findMany({
-  //     where: {
-  //       id: { in: dto.items.map((i) => i.menuItemId) },
-  //       restaurantId: dto.restaurantId,
-  //       available: true,
-  //     },
-  //   });
-
-  //   if (menuItems.length !== dto.items.length) {
-  //     throw new BadRequestException(
-  //       'Some menu items are invalid, unavailable, or not belong to this restaurant',
-  //     );
-  //   }
-
-  //   const orderItems = dto.items.map((item) => {
-  //     const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-  //     return {
-  //       menuItemId: item.menuItemId,
-  //       quantity: item.quantity,
-  //       price: menuItem.price,
-  //     };
-  //   });
-
-  //   const total = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-  //   const order = await this.prisma.order.create({
-  //     data: {
-  //       restaurantId: dto.restaurantId,
-  //       userId: dto.userId,
-  //       phone: dto.phone,
-  //       deliveryAddress: dto.deliveryAddress,
-  //       note: dto.note,
-  //       idempotencyKey: dto.idempotencyKey,
-  //       status: OrderStatus.PENDING,
-  //       total,
-  //       itemsValue: orderItems, // snapshot JSON
-  //       orderItems: {
-  //         create: orderItems,
-  //       },
-  //     },
-  //     include: {
-  //       orderItems: true,
-  //     },
-  //   });
-
-  //   return {
-  //     success: true,
-  //     data: {
-  //       id: order.id,
-  //       restaurantId: order.restaurantId,
-  //       userId: order.userId,
-  //       phone: order.phone,
-  //       deliveryAddress: order.deliveryAddress,
-  //       status: order.status,
-  //       total: order.total,
-  //       createdAt: order.createdAt,
-  //       updatedAt: order.createdAt,
-  //       itemsValue: order.itemsValue,
-  //     },
-  //     message: 'Creat order successfully!',
-  //   };
-  // }
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue(ORDER_QUEUE) private orderQueue: Queue,
+    private redisService: RedisService,
+    @InjectQueue(Cache_QUEUE) private cacheQueue: Queue,
+  ) {}
 
   async create(dto: CreateOrderDto): Promise<ApiResponse<OrderDto>> {
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: { id: dto.restaurantId },
-    });
-    if (!restaurant) throw new BadRequestException('Restaurant không tồn tại');
+    const storedItems: { key: string; quantity: number }[] = [];
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: dto.userId },
-    });
-    if (!user) throw new BadRequestException('User không tồn tại');
+    try {
+      // 1. Idempotency check
+      const existed = await this.prisma.order.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+      });
+      if (existed) {
+        return {
+          success: true,
+          data: existed,
+          message: 'Existing order',
+        };
+      }
 
-    // 1. idempotency check
-    const existed = await this.prisma.order.findUnique({
-      where: { idempotencyKey: dto.idempotencyKey },
-    });
+      // 2. Normalize items
+      const normalized = Object.values(
+        dto.items.reduce(
+          (acc, i) => {
+            acc[i.menuItemId] ??= { menuItemId: i.menuItemId, quantity: 0 };
+            acc[i.menuItemId].quantity += i.quantity;
+            return acc;
+          },
+          {} as Record<string, any>,
+        ),
+      );
 
-    if (existed) {
+      // 3. Validate data
+      const itemIds = normalized.map((i) => i.menuItemId);
+      const quantities = normalized.map((i) => i.quantity);
+
+      const [restaurant, user, menuItems] = await Promise.all([
+        this.prisma.restaurant.findUnique({ where: { id: dto.restaurantId } }),
+        this.prisma.user.findUnique({ where: { id: dto.userId } }),
+        this.prisma.menuItem.findMany({
+          where: {
+            id: { in: itemIds },
+            restaurantId: dto.restaurantId,
+            available: true,
+          },
+          select: { id: true, name: true, price: true, inventory: true },
+        }),
+      ]);
+
+      if (!user) throw new BadRequestException('User not found');
+      if (!restaurant) throw new BadRequestException('Restaurant not found');
+      if (menuItems.length !== normalized.length)
+        throw new BadRequestException('Invalid menu items');
+
+      // 4. Build snapshot and check inventory in Redis
+      const itemsValue: OrderItemValue[] = [];
+      for (const item of normalized) {
+        const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+        if (!menuItem) throw new BadRequestException(`Menu item not found`);
+
+        const ok = await this.redisService.decrementInventory(
+          `inventory:${menuItem.id}`,
+          item.quantity,
+        );
+        if (!ok)
+          throw new BadRequestException(
+            `Menu item "${menuItem.name}" is out of stock`,
+          );
+
+        storedItems.push({
+          key: `inventory:${menuItem.id}`,
+          quantity: item.quantity,
+        });
+
+        itemsValue.push({
+          menuItemId: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price,
+          quantity: item.quantity,
+        });
+      }
+
+      // 5. Calculate total
+      const total = itemsValue.reduce(
+        (sum, i) => sum + i.price * i.quantity,
+        0,
+      );
+
+      // 6. Create order in DB and push job to queue
+      const order = await this.prisma.order.create({
+        data: {
+          userId: dto.userId,
+          restaurantId: dto.restaurantId,
+          phone: dto.phone,
+          deliveryAddress: dto.deliveryAddress,
+          note: dto.note,
+          idempotencyKey: dto.idempotencyKey,
+          total: total, // will update later
+          itemsValue: itemsValue,
+          orderItems: {
+            createMany: {
+              data: (itemsValue as unknown as OrderItemValue[]).map((item) => ({
+                menuItemId: item.menuItemId,
+                quantity: item.quantity,
+                price: item.price,
+              })),
+            },
+          },
+        },
+      });
+
+      await this.orderQueue.add(
+        OrderJobName.CREATE,
+        { orderId: order.id, itemIds, quantities },
+        {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 1000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+
+      // 7. Return immediately (202 Accepted)
       return {
         success: true,
         data: {
-          id: existed.id,
-          restaurantId: existed.restaurantId,
-          userId: existed.userId,
-          phone: existed.phone,
-          deliveryAddress: existed.deliveryAddress,
-          status: existed.status,
-          total: existed.total,
-          createdAt: existed.createdAt,
-          updatedAt: existed.updatedAt,
-          itemsValue: existed.itemsValue,
+          id: order.id,
+          restaurantId: order.restaurantId,
+          userId: order.userId,
+          phone: order.phone,
+          deliveryAddress: order.deliveryAddress,
+          status: order.status,
+          note: order.note,
+          total: order.total,
+          createdAt: order.createdAt,
+          updatedAt: order.createdAt,
+          itemsValue: order.itemsValue,
         },
-        message: 'Existing order',
+        message: 'Order is being processed',
       };
+    } catch (error) {
+      this.logger.error(error);
+      if (storedItems.length)
+        await this.redisService.incrementInventoryBatch(storedItems);
+      throw error;
     }
-
-    // 2. fetch menu items (BẮT BUỘC cùng restaurant)
-    const menuItems = await this.prisma.menuItem.findMany({
-      where: {
-        id: { in: dto.items.map((i) => i.menuItemId) },
-        restaurantId: dto.restaurantId,
-        available: true,
-      },
-    });
-
-    if (menuItems.length !== dto.items.length) {
-      throw new BadRequestException(
-        'Some menu items are invalid, unavailable, or not belong to this restaurant',
-      );
-    }
-
-    // 3. validate inventory
-    for (const item of dto.items) {
-      const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-
-      if (menuItem.inventory !== null && item.quantity > menuItem.inventory) {
-        throw new BadRequestException(
-          `Menu item "${menuItem.name}" is out of stock`,
-        );
-      }
-    }
-
-    // 4. build order items
-    const orderItems = dto.items.map((item) => {
-      const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-      return {
-        menuItemId: item.menuItemId,
-        quantity: item.quantity,
-        price: menuItem.price,
-      };
-    });
-
-    const total = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-    // 5. TRANSACTION: create order + lock inventory
-    const order = await this.prisma.$transaction(
-      async (tx) => {
-        // 5.1 trừ inventory (chỉ khi inventory != null)
-        for (const item of dto.items) {
-          const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-
-          if (menuItem.inventory !== null) {
-            const updated = await tx.menuItem.updateMany({
-              where: {
-                id: menuItem.id,
-                inventory: {
-                  gte: item.quantity, // optimistic lock
-                },
-              },
-              data: {
-                inventory: {
-                  decrement: item.quantity,
-                },
-                available:
-                  menuItem.inventory - item.quantity - 0 <= 0
-                    ? false
-                    : undefined,
-              },
-            });
-
-            if (updated.count === 0) {
-              throw new BadRequestException(
-                `Menu qq "${menuItem.name}" is out of stock`,
-              );
-            }
-          }
-        }
-
-        // 5.2 create order
-        return tx.order.create({
-          data: {
-            restaurantId: dto.restaurantId,
-            userId: dto.userId,
-            phone: dto.phone,
-            deliveryAddress: dto.deliveryAddress,
-            note: dto.note,
-            idempotencyKey: dto.idempotencyKey,
-            status: OrderStatus.PENDING,
-            total,
-            itemsValue: orderItems,
-            orderItems: {
-              create: orderItems,
-            },
-          },
-        });
-      },
-      { timeout: 10000 },
-    );
-
-    return {
-      success: true,
-      data: {
-        id: order.id,
-        restaurantId: order.restaurantId,
-        userId: order.userId,
-        phone: order.phone,
-        deliveryAddress: order.deliveryAddress,
-        status: order.status,
-        total: order.total,
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-        itemsValue: order.itemsValue,
-      },
-      message: 'Create order successfully!',
-    };
   }
 
   async findAll(query: OrderQuery): Promise<ApiResponse<OrderDto[]>> {
+    const key = `orders:list${JSON.stringify(query)}`;
+    const cache = await this.redisService.get(key);
+    if (cache) {
+      return JSON.parse(cache);
+    }
+
     const pagination = getPaginationOptions(query);
 
     const [orders, total] = await Promise.all([
@@ -278,7 +214,7 @@ export class OrderService {
       this.prisma.order.count(),
     ]);
 
-    return successResponse<OrderDto[]>(
+    const response = successResponse<OrderDto[]>(
       [...orders],
       'Fetch list order successfully!',
       {
@@ -288,6 +224,10 @@ export class OrderService {
         totalPages: Math.ceil(total / (query.limit ? query.limit : 10)),
       },
     );
+
+    await this.redisService.set(key, JSON.stringify(response), 300); // cache for 5 minutes
+
+    return response;
   }
 
   async updateStatus(
@@ -300,7 +240,7 @@ export class OrderService {
     });
 
     if (!order) {
-      throw new BadRequestException('Order không tồn tại');
+      throw new BadRequestException('Order not found');
     }
 
     // 2. update status
@@ -309,6 +249,17 @@ export class OrderService {
       data: { status },
       include: { orderItems: true }, // lấy luôn các item nếu cần
     });
+
+    await this.cacheQueue.add(
+      CacheJobName.CLEAR_CACHE,
+      { key: 'orders:' },
+      {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
 
     // 3. trả về response
     return {
@@ -325,11 +276,17 @@ export class OrderService {
         updatedAt: updatedOrder.updatedAt,
         itemsValue: updatedOrder.itemsValue,
       },
-      message: `Update order status thành công!`,
+      message: `Update order status successfully!`,
     };
   }
 
   async findOne(id: string): Promise<ApiResponse<OrderDto>> {
+    const key = `orders:detail${id}`;
+    const cache = await this.redisService.get(key);
+    if (cache) {
+      return JSON.parse(cache);
+    }
+
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: { orderItems: true },
@@ -339,7 +296,7 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    return {
+    const response = {
       success: true,
       data: {
         id: order.id,
@@ -355,13 +312,9 @@ export class OrderService {
       },
       message: 'Fetch order detail successfully!',
     };
+
+    await this.redisService.set(key, JSON.stringify(response), 300);
+
+    return response;
   }
-
-  // update(id: number, updateOrderDto: UpdateOrderDto) {
-  //   return `This action updates a #id order`;
-  // }
-
-  // remove(id: number) {
-  //   return `This action removes a #id order`;
-  // }
 }

@@ -56,12 +56,27 @@ export const scenarios = [
           url: '/api/orders',
           headers: { Authorization: 'Bearer {{ authToken }}' },
           json: {
-            restaurantId: '{{ restaurantId }}',
+            // restaurantId: '{{ restaurantId }}',
+            restaurantId: '1670cd7c-74fc-4d2d-9ad4-4a22ee499f3b',
             userId: '{{ userId }}',
             phone: '0900000000',
             deliveryAddress: '123 Test St',
             idempotencyKey: '{{ idempotencyKey }}',
-            items: [{ menuItemId: '{{ menuItemId }}', quantity: 1 }],
+            // items: [{ menuItemId: '{{ menuItemId }}', quantity: 1 }],
+            items: [
+              {
+                menuItemId: '0777a4b2-0242-4103-a06a-4bf4a315c641',
+                quantity: 1,
+              },
+              {
+                menuItemId: '19d3b3cb-84aa-4f90-ae66-dbfe3aa48add',
+                quantity: 1,
+              },
+              {
+                menuItemId: '3980d3a9-e35e-4508-b4ff-d23551024267',
+                quantity: 1,
+              },
+            ],
           },
           capture: [{ json: '$.data.id', as: 'orderId' }],
         },

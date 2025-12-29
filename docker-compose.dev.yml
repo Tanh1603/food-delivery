@@ -20,7 +20,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
           cpus: "0.25"
@@ -48,7 +48,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
           cpus: "0.25"
@@ -76,7 +76,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
           cpus: "0.25"
@@ -84,33 +84,33 @@ services:
     networks:
       - food-network
 
-  api-4:
-    image: food-delivery:api-4
-    container_name: api-4
-    ports:
-      - "3004:3000"
-    build:
-      context: .
-      dockerfile: apps/food-delivery/Dockerfile.dev
-    env_file:
-      - "./apps/food-delivery/.env"
-    environment:
-      - SERVER_ID=api-4
-    volumes:
-      - ./apps:/app/apps
-      - ./nx.json:/app/nx.json
-      - ./tsconfig.base.json:/app/tsconfig.base.json
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
-    networks:
-      - food-network
+  # api-4:
+  #   image: food-delivery:api-4
+  #   container_name: api-4
+  #   ports:
+  #     - "3004:3000"
+  #   build:
+  #     context: .
+  #     dockerfile: apps/food-delivery/Dockerfile.dev
+  #   env_file:
+  #     - "./apps/food-delivery/.env"
+  #   environment:
+  #     - SERVER_ID=api-4
+  #   volumes:
+  #     - ./apps:/app/apps
+  #     - ./nx.json:/app/nx.json
+  #     - ./tsconfig.base.json:/app/tsconfig.base.json
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.5"
+  #         memory: 512M
+  #       reservations:
+  #         cpus: "0.25"
+  #         memory: 128M
+  #   networks:
+  #     - food-network
 
   # nginx load balancer
   nginx:
@@ -177,9 +177,26 @@ services:
     depends_on:
       - prometheus
 
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy noeviction
+    ports:
+      - "6379:6379"
+    networks:
+      - food-network
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   grafana-storage:
+  redis-data:
 
 networks:
   food-network:

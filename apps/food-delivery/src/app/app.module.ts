@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import Joi from 'joi';
@@ -13,6 +13,8 @@ import { RestaurantModule } from '../module/restaurant/restaurant.module';
 import { UserModule } from '../module/user/user.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { BullModule } from '@nestjs/bullmq';
+import { AppInitializer } from './app.initializer';
 
 @Module({
   imports: [
@@ -29,6 +31,11 @@ import { AppService } from './app.service';
         SERVER_ID: Joi.string().required(),
       }),
     }),
+    BullModule.forRoot({
+      connection: {
+        url: process.env.REDIS_URL,
+      },
+    }),
     PrismaModule,
     RedisModule,
     AuthModule,
@@ -41,10 +48,17 @@ import { AppService } from './app.service';
   controllers: [AppController],
   providers: [
     AppService,
+    AppInitializer,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private initializer: AppInitializer) {}
+
+  async onModuleInit() {
+    await this.initializer.initialize();
+  }
+}
