@@ -1,6 +1,7 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import Joi from 'joi';
 import { RedisModule } from '../common/redis/redis.module';
 import { AuthModule } from '../module/auth/auth.module';
@@ -12,9 +13,8 @@ import { PrismaModule } from '../module/prisma/prisma.module';
 import { RestaurantModule } from '../module/restaurant/restaurant.module';
 import { UserModule } from '../module/user/user.module';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { BullModule } from '@nestjs/bullmq';
 import { AppInitializer } from './app.initializer';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -31,11 +31,7 @@ import { AppInitializer } from './app.initializer';
         SERVER_ID: Joi.string().required(),
       }),
     }),
-    BullModule.forRoot({
-      connection: {
-        url: process.env.REDIS_URL,
-      },
-    }),
+    ScheduleModule.forRoot({}),
     PrismaModule,
     RedisModule,
     AuthModule,

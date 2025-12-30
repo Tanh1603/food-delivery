@@ -21,6 +21,19 @@ export class RedisService implements OnModuleInit {
     return this.redis.del(key);
   }
 
+  async keys(key: string) {
+    return this.redis.keys(key);
+  }
+
+  async lock(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    const result = await this.redis.set(key, value, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
   async delByPrefix(prefix: string) {
     const stream = this.redis.scanStream({
       match: `${prefix}*`,
@@ -32,6 +45,10 @@ export class RedisService implements OnModuleInit {
         await this.redis.del(...keys);
       }
     }
+  }
+
+  pipeline() {
+    return this.redis.pipeline();
   }
 
   // Atomic decrement inventory
