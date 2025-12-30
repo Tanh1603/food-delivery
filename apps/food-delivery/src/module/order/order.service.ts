@@ -1,23 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Queue } from 'bullmq';
 import { ApiResponse } from '../../common/dto/api-response.dto';
 import { successResponse } from '../../common/helper/api-response.helper';
 import { getPaginationOptions } from '../../common/helper/pagination-query.helper';
-import { Cache_QUEUE, CacheJobName } from '../../common/redis/cache.processor';
 import { RedisService } from '../../common/redis/redis.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from './../../../generated/prisma/enums';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderDto } from './dto/order.dto';
 import { OrderQuery } from './dto/order.query';
-import { ORDER_QUEUE, OrderJobName } from './order.processor';
 
 type OrderItemValue = {
   menuItemId: string;
@@ -31,9 +27,7 @@ export class OrderService {
 
   constructor(
     private prisma: PrismaService,
-    @InjectQueue(ORDER_QUEUE) private orderQueue: Queue,
     private redisService: RedisService,
-    @InjectQueue(Cache_QUEUE) private cacheQueue: Queue,
   ) {}
 
   async create(dto: CreateOrderDto): Promise<ApiResponse<OrderDto>> {
@@ -66,7 +60,6 @@ export class OrderService {
 
       // 3. Validate data
       const itemIds = normalized.map((i) => i.menuItemId);
-      const quantities = normalized.map((i) => i.quantity);
 
       const [restaurant, user, menuItems] = await Promise.all([
         this.prisma.restaurant.findUnique({ where: { id: dto.restaurantId } }),
@@ -143,17 +136,6 @@ export class OrderService {
         },
       });
 
-      await this.orderQueue.add(
-        OrderJobName.CREATE,
-        { orderId: order.id, itemIds, quantities },
-        {
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 1000 },
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
-
       // 7. Return immediately (202 Accepted)
       return {
         success: true,
@@ -181,12 +163,6 @@ export class OrderService {
   }
 
   async findAll(query: OrderQuery): Promise<ApiResponse<OrderDto[]>> {
-    const key = `orders:list${JSON.stringify(query)}`;
-    const cache = await this.redisService.get(key);
-    if (cache) {
-      return JSON.parse(cache);
-    }
-
     const pagination = getPaginationOptions(query);
 
     const [orders, total] = await Promise.all([
@@ -225,8 +201,6 @@ export class OrderService {
       },
     );
 
-    await this.redisService.set(key, JSON.stringify(response), 300); // cache for 5 minutes
-
     return response;
   }
 
@@ -250,17 +224,6 @@ export class OrderService {
       include: { orderItems: true }, // lấy luôn các item nếu cần
     });
 
-    await this.cacheQueue.add(
-      CacheJobName.CLEAR_CACHE,
-      { key: 'orders:' },
-      {
-        attempts: 5,
-        backoff: { type: 'exponential', delay: 1000 },
-        removeOnComplete: true,
-        removeOnFail: false,
-      },
-    );
-
     // 3. trả về response
     return {
       success: true,
@@ -281,12 +244,6 @@ export class OrderService {
   }
 
   async findOne(id: string): Promise<ApiResponse<OrderDto>> {
-    const key = `orders:detail${id}`;
-    const cache = await this.redisService.get(key);
-    if (cache) {
-      return JSON.parse(cache);
-    }
-
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: { orderItems: true },
@@ -312,8 +269,6 @@ export class OrderService {
       },
       message: 'Fetch order detail successfully!',
     };
-
-    await this.redisService.set(key, JSON.stringify(response), 300);
 
     return response;
   }

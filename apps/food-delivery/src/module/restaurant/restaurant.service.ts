@@ -95,13 +95,6 @@ export class RestaurantService {
     restaurantId: string,
     query: MenuItemQuery,
   ): Promise<ApiResponse<MenuItemDto[]>> {
-    const key = `restaurants:${restaurantId}:menu-items:list:${JSON.stringify(query)}`;
-    const cached = await this.redisService.get(key);
-
-    if (cached) {
-      return JSON.parse(cached);
-    }
-
     const pagination = getPaginationOptions(query);
 
     const [menuItems, total] = await Promise.all([
@@ -125,8 +118,20 @@ export class RestaurantService {
       }),
     ]);
 
+    const redisKeys = menuItems.map((item) => `inventory:${item.id}`);
+    const pipeline = this.redisService.pipeline();
+    redisKeys.forEach((key) => pipeline.get(key));
+    const results = await pipeline.exec();
+    const menuItemsWithInventory = menuItems.map((item, idx) => {
+      const redisQty = results[idx][1]; // [err, value]
+      return {
+        ...item,
+        inventory: redisQty !== null ? Number(redisQty) : 0, // fallback 0 nếu Redis null
+      };
+    });
+
     const response = successResponse<MenuItemDto[]>(
-      [...menuItems],
+      menuItemsWithInventory,
       'Fetch menu items successfully!',
       {
         total,
@@ -135,8 +140,6 @@ export class RestaurantService {
         totalPages: Math.ceil(total / (query.limit ? query.limit : 10)),
       },
     );
-
-    await this.redisService.set(key, JSON.stringify(response), 300);
 
     return response;
   }
