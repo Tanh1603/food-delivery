@@ -2,7 +2,7 @@ services:
   api-1:
     build:
       context: .
-      dockerfile: apps/food-delivery/Dockerfile.prod
+      dockerfile: apps/food-delivery/Dockerfile
     container_name: api-1
     ports:
       - "3001:3000"
@@ -17,7 +17,7 @@ services:
   api-2:
     build:
       context: .
-      dockerfile: apps/food-delivery/Dockerfile.prod
+      dockerfile: apps/food-delivery/Dockerfile
     container_name: api-2
     ports:
       - "3002:3000"
@@ -32,7 +32,7 @@ services:
   api-3:
     build:
       context: .
-      dockerfile: apps/food-delivery/Dockerfile.prod
+      dockerfile: apps/food-delivery/Dockerfile
     container_name: api-3
     ports:
       - "3003:3000"
