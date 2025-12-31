@@ -1,9 +1,14 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { ApiResponseWrapper } from '../../common/helper/api-response.helper';
+import { MenuItemDto } from '../menu/dto/menu-item.dto';
+import { MenuItemQuery } from '../menu/dto/menu-item.query';
+import { RestaurantDto } from './dto/restaurant.dto';
 import { RestaurantQuery } from './dto/restaurant.query';
 import { RestaurantService } from './restaurant.service';
-import { MenuItemQuery } from '../menu/dto/menu-item.query';
 
 @Controller('restaurants')
+@ApiBearerAuth()
 export class RestaurantController {
   constructor(private readonly restaurantService: RestaurantService) {}
 
@@ -13,16 +18,25 @@ export class RestaurantController {
   // }
 
   @Get()
+  @ApiResponseWrapper(RestaurantDto, true)
   async findAll(@Query() query: RestaurantQuery) {
     return this.restaurantService.findAll(query);
   }
 
   @Get(':id')
+  @ApiParam({
+    name: 'id',
+  })
+  @ApiResponseWrapper(RestaurantDto)
   async findOne(@Param('id') id: string) {
     return this.restaurantService.findOne(id);
   }
 
   @Get(':id/menu')
+  @ApiParam({
+    name: 'id',
+  })
+  @ApiResponseWrapper(MenuItemDto, true)
   async getMenuItems(@Param('id') id: string, @Query() query: MenuItemQuery) {
     return this.restaurantService.getMenuItems(id, query);
   }
