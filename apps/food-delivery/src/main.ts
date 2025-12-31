@@ -9,6 +9,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { MetricsInterceptor } from './common/interceptor/metrics.interceptor';
 import { MetricService } from './module/metrics/metric.service';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -42,6 +43,22 @@ async function bootstrap() {
       }
     })(),
   );
+
+  const config = new DocumentBuilder()
+    .setTitle('Demo Food-Delivery api')
+    .setDescription('The Food-Delivery API description')
+    .setVersion('1.0')
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'Authorization',
+      description: 'Enter JWT token',
+      in: 'header',
+    })
+    .build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup(`${globalPrefix}/docs`, app, documentFactory);
 
   app.enableShutdownHooks();
 
