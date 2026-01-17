@@ -18,7 +18,7 @@ export class PrismaService
       statement_timeout: 30000,
     });
     const adapter = new PrismaPg(pool);
-    super({ adapter });
+    super({ adapter, errorFormat: "pretty", });
   }
 
   async onModuleInit() {
